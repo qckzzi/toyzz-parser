@@ -1,0 +1,11 @@
+venv/
+.env
+.idea
+*.log
+*.cache
+*.pyc
+*.pyo
+*~
+.vscode/
+*.jpg
+.python-version
