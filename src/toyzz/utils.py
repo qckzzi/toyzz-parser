@@ -1,4 +1,5 @@
 import json
+import html
 import re
 from math import (
     ceil,
@@ -7,6 +8,7 @@ from math import (
 import requests
 from bs4 import (
     BeautifulSoup,
+    NavigableString,
 )
 from selenium import (
     webdriver,
@@ -40,7 +42,11 @@ class Parser:
     attribute_value_data_class = ToyzzAttributeValueDTO
     brand_data_class = ToyzzBrandDTO
 
-    product_re_pattern = r'var\s+data\s*=\s*{[^{}]*}'
+    product_detail_data_re_pattern = r"<script>\s*window\['serials'\]\s*=\s*(?P<json_data>.*?)\s*</script>"
+    product_common_data_re_pattern = (
+        r'<script>\s*window\.addEventListener\("load", function\(\) '
+        r'{\s*var data =({.*?});\s+dataLayer\.push\(data\);\s*}\);\s*</script>'
+    )
     synonyms_for_mass = ('ağırlık', 'ağırlığı')
 
     # TODO: Декомпозировать; Переписать dirty code
@@ -97,23 +103,23 @@ class Parser:
         pass
 
     # TODO: Декомпозировать; Переписать dirty code
+    #   Метод должен возвращать список с экземплярами DTO, т.к. в карточке товара имеются разные варианты товара
     @classmethod
     def parse_product_by_url(cls, url: str) -> product_data_class:
         response = requests.get(url)
         response.raise_for_status()
 
-        matches = re.search(cls.product_re_pattern, response.text, re.MULTILINE)
-        data_str = matches.group()
+        detail_data_matches = re.search(cls.product_detail_data_re_pattern, response.text)
+        detail_data_str = detail_data_matches.group('json_data')
 
-        data_str_clean = re.sub(r'//[^\n]*', '', data_str)
+        common_data_matches = re.search(cls.product_common_data_re_pattern, response.text, re.DOTALL)
+        common_data_str = common_data_matches.group(1)
+        common_data_str_clean = re.sub(r'//[^\n]*', '', common_data_str)
 
-        regex = r'{[^{}]*}'
-        matches = re.search(regex, data_str_clean, re.MULTILINE)
-        data_str = matches.group()
+        detail_data = json.loads(detail_data_str)
+        common_data = json.loads(common_data_str_clean.replace('\'', '"'))
 
-        raw_product = json.loads(data_str.replace('\'', '"'))
-
-        brand_name = raw_product['brand']
+        brand_name = html.unescape(common_data['brand'])
         brand = cls.brand_data_class(brand_name)
 
         soup = BeautifulSoup(response.text, 'html.parser')
@@ -122,7 +128,7 @@ class Parser:
         if discounted_price_tag:
             discounted_price = discounted_price_tag.text
         else:
-            discounted_price = raw_product['price']
+            discounted_price = common_data['price']
 
         image_tags = soup.find_all('img', class_='rsTmb noDrag')
         image_urls = [
@@ -138,7 +144,7 @@ class Parser:
 
         for p in paragraphs:
             text = p.get_text(strip=True)
-            match = re.search(r':\s*(.*)', text)
+            match = re.search(r'[:;]\s*(.*)', text)
 
             if match:
                 value = match.group(1)
@@ -153,21 +159,23 @@ class Parser:
                         width, depth, height = dimensions
 
         category_breadcrumb = soup.find('ol', class_='breadcrumb')
-        category_name = category_breadcrumb.contents[5].text
+        category_tags = list(filter(lambda x: not isinstance(x, NavigableString), category_breadcrumb.contents))
+        category_name = html.unescape(category_tags[-2].text)
         category = cls.category_data_class(category_name)
 
+        # FIXME: Это полный Peace, Death!
         product = cls.product_data_class(
-            id=int(raw_product['id'].strip()),
-            name=raw_product['name'].strip(),
+            id=int(common_data['id'].strip()),
+            name=html.unescape(common_data['name'].strip()),
             url=url,
             category=category,
             brand=brand,
-            stock=int(raw_product['stock'].strip()),
-            price=float(raw_product['price'].replace('.', '').replace(',', '.').strip()),
+            stock=int(common_data['stock'].strip()),
+            price=float(common_data['price'].replace('.', '').replace(',', '.').strip()),
             discounted_price=float(discounted_price.replace('.', '').replace(',', '.').strip()),
-            product_group_code=raw_product['productGroupCode'].strip(),
-            product_code=raw_product['productCode'].strip(),
-            code=raw_product['code'].strip(),
+            product_group_code=common_data['productGroupCode'].strip(),
+            product_code=common_data['productCode'].strip(),
+            code=common_data['code'].strip(),
             weight=float(weight.replace(',', '.').strip()),
             width=float(width.replace(',', '.').strip()),
             height=float(height.replace(',', '.').strip()),

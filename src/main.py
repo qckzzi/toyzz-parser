@@ -34,10 +34,7 @@ def callback(ch, method, properties, body):
         processing_function = processing_map[processing_type]
         processing_function(processing_url)
     except Exception as e:
-        error = f'There was a problem: {e}'
-        write_log_entry(error)
-        logging.exception(error)
-        print(traceback.format_exc())
+        handle_exception(e)
         return
 
 
@@ -45,17 +42,15 @@ def category_processing(url: str):
     product_url_list = Parser.parse_product_urls_by_category_url(url)
 
     for product_url in product_url_list:
-        product_processing(product_url)
+        try:
+            product_processing(product_url)
+        except Exception as e:
+            handle_exception(e)
+            continue
 
 
 def product_card_processing(url: str):
-    trendyol_product_urls = Parser.parse_product_by_url(url)
-
-    if not trendyol_product_urls:
-        product_processing(url)
-
-    for product_url in trendyol_product_urls:
-        product_processing(product_url)
+    pass
 
 
 def product_processing(url: str):
@@ -90,6 +85,13 @@ def fetch_image(url: str) -> bytes:
         image = image_response.content
 
     return image
+
+
+def handle_exception(e: Exception):
+    error = f'There was a problem ({e.__class__.__name__}): {e}'
+    write_log_entry(error)
+    logging.exception(error)
+    print(traceback.format_exc())
 
 
 if __name__ == '__main__':
