@@ -1,8 +1,12 @@
-import json
 import html
+import json
 import re
 from math import (
     ceil,
+)
+from urllib.parse import (
+    urlparse,
+    urlunparse,
 )
 
 import requests
@@ -103,9 +107,8 @@ class Parser:
         pass
 
     # TODO: Декомпозировать; Переписать dirty code
-    #   Метод должен возвращать список с экземплярами DTO, т.к. в карточке товара имеются разные варианты товара
     @classmethod
-    def parse_product_by_url(cls, url: str) -> product_data_class:
+    def parse_products_by_card_url(cls, url: str) -> list[product_data_class]:
         response = requests.get(url)
         response.raise_for_status()
 
@@ -116,19 +119,13 @@ class Parser:
         common_data_str = common_data_matches.group(1)
         common_data_str_clean = re.sub(r'//[^\n]*', '', common_data_str)
 
-        detail_data = json.loads(detail_data_str)
+        product_card_data = json.loads(detail_data_str)
         common_data = json.loads(common_data_str_clean.replace('\'', '"'))
 
         brand_name = html.unescape(common_data['brand'])
         brand = cls.brand_data_class(brand_name)
 
         soup = BeautifulSoup(response.text, 'html.parser')
-        discounted_price_tag = soup.find('span', class_='a fs-22')
-
-        if discounted_price_tag:
-            discounted_price = discounted_price_tag.text
-        else:
-            discounted_price = common_data['price']
 
         image_tags = soup.find_all('img', class_='rsTmb noDrag')
         image_urls = [
@@ -163,24 +160,38 @@ class Parser:
         category_name = html.unescape(category_tags[-2].text)
         category = cls.category_data_class(category_name)
 
-        # FIXME: Это полный Peace, Death!
-        product = cls.product_data_class(
-            id=int(common_data['id'].strip()),
-            name=html.unescape(common_data['name'].strip()),
-            url=url,
-            category=category,
-            brand=brand,
-            stock=int(common_data['stock'].strip()),
-            price=float(common_data['price'].replace('.', '').replace(',', '.').strip()),
-            discounted_price=float(discounted_price.replace('.', '').replace(',', '.').strip()),
-            product_group_code=common_data['productGroupCode'].strip(),
-            product_code=common_data['productCode'].strip(),
-            code=common_data['code'].strip(),
-            weight=float(weight.replace(',', '.').strip()),
-            width=float(width.replace(',', '.').strip()),
-            height=float(height.replace(',', '.').strip()),
-            depth=float(depth.replace(',', '.').strip()),
-            image_urls=image_urls,
-        )
+        parsed_url = urlparse(url)
+        clean_url = urlunparse((
+            parsed_url.scheme,
+            parsed_url.netloc,
+            parsed_url.path,
+            parsed_url.params,
+            '',
+            parsed_url.fragment,
+        ))
 
-        return product
+        products = []
+        for product_unit in product_card_data:
+            # FIXME: Это полный Peace, Death!
+            product = cls.product_data_class(
+                id=product_unit['id'],
+                name=html.unescape(common_data['name'].strip()),
+                url=f'{clean_url}?serial={product_unit["id"]}',
+                category=category,
+                brand=brand,
+                stock=product_unit['stock'],
+                price=product_unit['market_price'],
+                discounted_price=product_unit['price'],
+                product_group_code=common_data['productGroupCode'].strip(),
+                product_code=product_unit['serial_code'].strip(),
+                code=common_data['code'].strip(),
+                weight=float(weight.replace(',', '.').strip()),
+                width=float(width.replace(',', '.').strip()),
+                height=float(height.replace(',', '.').strip()),
+                depth=float(depth.replace(',', '.').strip()),
+                image_urls=image_urls,
+            )
+
+            products.append(product)
+
+        return products

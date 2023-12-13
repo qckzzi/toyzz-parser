@@ -1,97 +1,31 @@
 #!/usr/bin/env python
 import json
 import logging
-import traceback
 
 import pika
-import requests
 
 import config
-from markets_bridge.utils import (
-    Formatter,
-    Sender,
-    write_log_entry,
+from core.enums import (
+    EntityType,
 )
-from toyzz.utils import (
-    Parser,
+from core.utils import (
+    handle_exception,
 )
 
 
 def callback(ch, method, properties, body):
-    message = json.loads(body)
-
     try:
+        message = json.loads(body)
         processing_type = message['type']
         processing_url = message['url']
 
         logging.info(f'{processing_type.lower().capitalize()} was received for parsing. URL: {processing_url}')
 
-        processing_map = {
-            'PRODUCT': product_processing,
-            'CATEGORY': category_processing,
-        }
-
-        processing_function = processing_map[processing_type]
+        processing_function = EntityType.get_processing_function_for_entity_type(processing_type)
         processing_function(processing_url)
     except Exception as e:
         handle_exception(e)
         return
-
-
-def category_processing(url: str):
-    product_url_list = Parser.parse_product_urls_by_category_url(url)
-
-    for product_url in product_url_list:
-        try:
-            product_processing(product_url)
-        except Exception as e:
-            handle_exception(e)
-            continue
-
-
-def product_card_processing(url: str):
-    pass
-
-
-def product_processing(url: str):
-    formatter = Formatter()
-    toyzz_product = Parser.parse_product_by_url(url)
-
-    formatter.toyzz_product = toyzz_product
-
-    mb_category = formatter.get_category()
-    Sender.send_category(mb_category)
-
-    mb_brand = formatter.get_brand()
-    Sender.send_brand(mb_brand)
-
-    mb_product = formatter.get_product()
-    existed_product_response = Sender.send_product(mb_product)
-
-    if existed_product_response.status_code == 201:
-        product = existed_product_response.json()
-        for image_url in toyzz_product.image_urls:
-            image = fetch_image(image_url)
-            Sender.send_image(image, product['id'])
-
-
-def fetch_image(url: str) -> bytes:
-    try:
-        image_response = requests.get(url)
-    except (requests.HTTPError, requests.ConnectionError, requests.ConnectTimeout):
-        logging.error('An error occurred while receiving the image. Try again...')
-        image = fetch_image(url)
-    else:
-        image = image_response.content
-
-    return image
-
-
-def handle_exception(e: Exception):
-    error = f'There was a problem ({e.__class__.__name__}): {e}'
-    write_log_entry(error)
-    logging.exception(error)
-    print(traceback.format_exc())
 
 
 if __name__ == '__main__':

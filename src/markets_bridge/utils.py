@@ -15,69 +15,6 @@ from markets_bridge.dtos import (
     MBCategoryDTO,
     MBProductDTO,
 )
-from toyzz.dtos import (
-    ToyzzProductDTO,
-)
-
-
-class Formatter:
-    """Data formatter for Markets-Bridge service."""
-
-    product_data_class = MBProductDTO
-    category_data_class = MBCategoryDTO
-    brand_data_class = MBBrandDTO
-
-    def __init__(self):
-        self._toyzz_product = None
-
-    @property
-    def toyzz_product(self) -> ToyzzProductDTO:
-        return self._toyzz_product
-
-    @toyzz_product.setter
-    def toyzz_product(self, raw_product: ToyzzProductDTO):
-        if not isinstance(raw_product, ToyzzProductDTO):
-            raise ValueError('Toyzz product must be ToyzzProductDTO')
-
-        self._toyzz_product = raw_product
-
-    def get_product(self) -> product_data_class:
-        product = self.product_data_class(
-            external_id=self.toyzz_product.id,
-            name=self.toyzz_product.name,
-            url=self.toyzz_product.url,
-            price=self.toyzz_product.price,
-            discounted_price=self.toyzz_product.discounted_price,
-            stock_quantity=self.toyzz_product.stock,
-            product_code=self.toyzz_product.product_code,
-            category_name=self.toyzz_product.category.name,
-            brand_name=self.toyzz_product.brand.name,
-            depth=self.toyzz_product.depth,
-            width=self.toyzz_product.width,
-            height=self.toyzz_product.height,
-            weight=self.toyzz_product.weight,
-            marketplace_id=config.marketplace_id,
-        )
-
-        return product
-
-    def get_category(self) -> category_data_class:
-        category = self.category_data_class(
-            external_id=self.toyzz_product.category.id,
-            name=self.toyzz_product.category.name,
-            marketplace_id=config.marketplace_id,
-        )
-
-        return category
-
-    def get_brand(self) -> brand_data_class:
-        brand = self.brand_data_class(
-            external_id=self.toyzz_product.brand.id,
-            name=self.toyzz_product.brand.name,
-            marketplace_id=config.marketplace_id,
-        )
-
-        return brand
 
 
 class Sender:
