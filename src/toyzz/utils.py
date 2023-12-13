@@ -128,10 +128,7 @@ class Parser:
         soup = BeautifulSoup(response.text, 'html.parser')
 
         image_tags = soup.find_all('img', class_='rsTmb noDrag')
-        image_urls = [
-            image.get('src').replace('300x300', 'orj') for image in image_tags
-            if 'data-rsvideo' not in image.parent.attrs
-        ]
+        image_tags = list(filter(lambda x: 'data-rsvideo' not in x.parent.attrs, image_tags))
         paragraphs = soup.find_all('p')
 
         weight = '0'
@@ -171,11 +168,24 @@ class Parser:
         ))
 
         products = []
+
+        common_title = html.unescape(common_data['name'].strip())
+
         for product_unit in product_card_data:
+            if len(product_card_data) == 1:
+                image_urls = [tag.get('src').replace('300x300', 'orj') for tag in image_tags]
+                name = common_title
+            else:
+                image_urls = [
+                    tag.get('src').replace('300x300', 'orj') for tag in image_tags
+                    if int(tag.get('data-id')) == product_unit['id']
+                ]
+                name = f'{common_title}, {product_unit['title']}'
+
             # FIXME: Это полный Peace, Death!
             product = cls.product_data_class(
                 id=product_unit['id'],
-                name=html.unescape(common_data['name'].strip()),
+                name=name,
                 url=f'{clean_url}?serial={product_unit["id"]}',
                 category=category,
                 brand=brand,

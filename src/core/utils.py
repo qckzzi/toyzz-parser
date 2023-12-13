@@ -33,32 +33,34 @@ def category_processing(url: str):
             continue
 
 
+# TODO: Декомпозировать
 def product_card_processing(url: str):
     formatter = Formatter()
-    toyzz_product = Parser.parse_products_by_card_url(url)
+    toyzz_products = Parser.parse_products_by_card_url(url)
 
-    formatter.toyzz_product = toyzz_product
+    for product in toyzz_products:
+        formatter.toyzz_product = product
 
-    mb_category = formatter.get_category()
-    Sender.send_category(mb_category)
+        mb_category = formatter.get_category()
+        Sender.send_category(mb_category)
 
-    mb_brand = formatter.get_brand()
-    Sender.send_brand(mb_brand)
+        mb_brand = formatter.get_brand()
+        Sender.send_brand(mb_brand)
 
-    mb_product = formatter.get_product()
-    existed_product_response = Sender.send_product(mb_product)
+        mb_product = formatter.get_product()
+        existed_product_response = Sender.send_product(mb_product)
 
-    if existed_product_response.status_code == 201:
-        product = existed_product_response.json()
+        if existed_product_response.status_code == 201:
+            existed_product = existed_product_response.json()
 
-        for image_url in toyzz_product.image_urls:
-            try:
-                image = fetch_image(image_url)
-            except IOError as e:
-                handle_exception(e)
-                continue
-            else:
-                Sender.send_image(image, product['id'])
+            for image_url in product.image_urls:
+                try:
+                    image = fetch_image(image_url)
+                except IOError as e:
+                    handle_exception(e)
+                    continue
+                else:
+                    Sender.send_image(image, existed_product['id'])
 
 
 def fetch_image(url: str, repeat_number: int = 1) -> bytes:
