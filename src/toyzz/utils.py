@@ -190,7 +190,7 @@ class Parser:
                 category=category,
                 brand=brand,
                 stock=product_unit['stock'],
-                price=product_unit['market_price'],
+                price=product_unit['market_price'] or product_unit['price'],
                 discounted_price=product_unit['price'],
                 product_group_code=common_data['productGroupCode'].strip(),
                 product_code=product_unit['serial_code'].strip(),
