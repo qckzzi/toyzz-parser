@@ -13,6 +13,8 @@ import config
 from markets_bridge.dtos import (
     MBBrandDTO,
     MBCategoryDTO,
+    MBCharacteristicDTO,
+    MBCharacteristicValueDTO,
     MBProductDTO,
 )
 
@@ -45,6 +47,24 @@ class Sender:
         return cls._send_object(
             brand,
             url=config.mb_brands_url,
+        )
+
+    @classmethod
+    def send_characteristic(cls, characteristic: MBCharacteristicDTO):
+        logging.info(f'Sending "{characteristic.name}" characteristic.')
+
+        return cls._send_object(
+            characteristic,
+            url=config.mb_characteristics_url,
+        )
+
+    @classmethod
+    def send_characteristic_value(cls, value: MBCharacteristicValueDTO):
+        logging.info(f'Sending "{value.value}" value.')
+
+        return cls._send_object(
+            value,
+            url=config.mb_characteristic_values_url,
         )
 
     @classmethod

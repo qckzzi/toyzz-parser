@@ -37,6 +37,7 @@ from toyzz.dtos import (
 )
 
 
+# TODO: SRP
 class Parser:
     """Toyzz information parser."""
 
@@ -129,6 +130,20 @@ class Parser:
 
         image_tags = soup.find_all('img', class_='rsTmb noDrag')
         image_tags = list(filter(lambda x: 'data-rsvideo' not in x.parent.attrs, image_tags))
+
+        product_specs = soup.find(attrs={'class': 'product-specs'})
+        product_specs = list(filter(lambda x: not isinstance(x, NavigableString), product_specs.contents))
+        values = []
+
+        for spec in product_specs:
+            spec_data = list(filter(lambda x: not isinstance(x, NavigableString), spec.contents))
+            name_tag, value_tag = spec_data
+
+            if name_tag.text.lower().strip() in ('yaş aralığı', 'cinsiyet'):
+                attribute = cls.attribute_data_class(name_tag.text.strip())
+                attribute_value = cls.attribute_value_data_class(value_tag.text.lstrip(':').strip(), attribute)
+                values.append(attribute_value)
+
         paragraphs = soup.find_all('p')
 
         weight = '0'
@@ -200,6 +215,7 @@ class Parser:
                 height=float(height.replace(',', '.').strip()),
                 depth=float(depth.replace(',', '.').strip()),
                 image_urls=image_urls,
+                values=values,
             )
 
             products.append(product)

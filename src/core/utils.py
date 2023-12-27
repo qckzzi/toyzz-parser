@@ -8,6 +8,8 @@ import config
 from markets_bridge.dtos import (
     MBBrandDTO,
     MBCategoryDTO,
+    MBCharacteristicDTO,
+    MBCharacteristicValueDTO,
     MBProductDTO,
 )
 from markets_bridge.utils import (
@@ -46,6 +48,14 @@ def product_card_processing(url: str):
 
         mb_brand = formatter.get_brand()
         Sender.send_brand(mb_brand)
+
+        mb_characteristics = formatter.get_characteristics()
+        for char in mb_characteristics:
+            Sender.send_characteristic(char)
+
+        mb_values = formatter.get_characteristic_values()
+        for value in mb_values:
+            Sender.send_characteristic_value(value)
 
         mb_product = formatter.get_product()
         existed_product_response = Sender.send_product(mb_product)
@@ -94,6 +104,8 @@ class Formatter:
     product_data_class = MBProductDTO
     category_data_class = MBCategoryDTO
     brand_data_class = MBBrandDTO
+    characteristic_data_class = MBCharacteristicDTO
+    characteristic_value_data_class = MBCharacteristicValueDTO
 
     def __init__(self):
         self._toyzz_product = None
@@ -125,6 +137,7 @@ class Formatter:
             height=self.toyzz_product.height,
             weight=self.toyzz_product.weight,
             marketplace_id=config.marketplace_id,
+            characteristic_values=[value.value for value in self.toyzz_product.values],
         )
 
         return product
@@ -146,3 +159,31 @@ class Formatter:
         )
 
         return brand
+
+    def get_characteristics(self) -> list[characteristic_data_class]:
+        characteristic_list = []
+
+        for value in self.toyzz_product.values:
+
+            characteristic = self.characteristic_data_class(
+                name=value.attribute.name,
+                marketplace_id=config.marketplace_id,
+            )
+
+            characteristic_list.append(characteristic)
+
+        return characteristic_list
+
+    def get_characteristic_values(self) -> list[characteristic_value_data_class]:
+        values = []
+
+        for toyzz_value in self.toyzz_product.values:
+            mb_value = self.characteristic_value_data_class(
+                value=toyzz_value.value,
+                characteristic_name=toyzz_value.attribute.name,
+                marketplace_id=config.marketplace_id,
+            )
+
+            values.append(mb_value)
+
+        return values
