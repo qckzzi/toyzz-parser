@@ -1,5 +1,6 @@
 from dataclasses import (
     dataclass,
+    field,
 )
 
 
@@ -39,3 +40,19 @@ class MBProductDTO:
     category_name: str
     brand_name: str
     marketplace_id: int
+    characteristic_values: list[str] = field(default_factory=list)
+
+
+@dataclass
+class MBCharacteristicDTO:
+    name: str
+    marketplace_id: int
+    external_id: int = 0
+
+
+@dataclass
+class MBCharacteristicValueDTO:
+    value: str
+    characteristic_name: str
+    marketplace_id: int
+    external_id: int = 0
