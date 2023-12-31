@@ -17,14 +17,8 @@ from bs4 import (
 from selenium import (
     webdriver,
 )
-from selenium.webdriver.common.by import (
-    By,
-)
-from selenium.webdriver.support import (
-    expected_conditions as EC,
-)
-from selenium.webdriver.support.wait import (
-    WebDriverWait,
+from selenium.webdriver.chrome.options import (
+    Options,
 )
 
 import config
@@ -96,8 +90,12 @@ class Parser:
     def send_category_request(cls, url: str, page: int = 1) -> str:
         page_parameter = 'q=/page/'
         url = f'{url}?{page_parameter}{page}'
+        chrome_options = Options()
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--headless')
+        chrome_options.add_argument('--disable-dev-shm-usage')
 
-        with webdriver.Chrome() as driver:
+        with webdriver.Chrome(options=chrome_options) as driver:
             driver.get(url)
             page_source = driver.page_source
 
@@ -161,7 +159,7 @@ class Parser:
 
                 if any(mass_word in text for mass_word in cls.synonyms_for_mass):
                     weight = value.replace(' kg', '')
-                elif 'kutu ölçüsü' in text:
+                elif 'ölçüsü' in text:
                     dimensions = value.replace(' cm', '').strip('.').split(" x ")
 
                     if len(dimensions) == 3:
