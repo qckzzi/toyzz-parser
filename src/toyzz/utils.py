@@ -165,6 +165,16 @@ class Parser:
                     if len(dimensions) == 3:
                         width, depth, height = dimensions
 
+        annotation_block = soup.find(attrs={'class': 'text fs-16'})
+        description_block = annotation_block.find('br')
+        description_paragraphs = description_block.find_all('p')
+        description_paragraph_strings = [
+            p.text if '{{' not in p.text and 'Toyzz' not in p.text else '' for p in description_paragraphs
+        ]
+        description = ''.join(description_paragraph_strings)
+        description = re.sub(r'[\n\t]', '', description)
+        description = description.replace(r' ', ' ').strip()
+
         category_breadcrumb = soup.find('ol', class_='breadcrumb')
         category_tags = list(filter(lambda x: not isinstance(x, NavigableString), category_breadcrumb.contents))
         category_name = html.unescape(category_tags[-2].text)
@@ -214,6 +224,7 @@ class Parser:
                 depth=float(depth.replace(',', '.').strip()),
                 image_urls=image_urls,
                 values=values,
+                description=description,
             )
 
             products.append(product)

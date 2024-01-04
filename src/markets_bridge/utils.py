@@ -1,13 +1,14 @@
 import logging
 import uuid
+from abc import (
+    ABC,
+    abstractmethod,
+)
 from dataclasses import (
     asdict,
 )
 
 import requests
-from requests import (
-    Response,
-)
 
 import config
 from markets_bridge.dtos import (
@@ -19,87 +20,101 @@ from markets_bridge.dtos import (
 )
 
 
-class Sender:
-    """Data sender to Markets-Bridge service."""
+class BaseSender(ABC):
+    """Базовый отправитель данных к Markets-Bridge."""
 
     @classmethod
-    def send_product(cls, product: MBProductDTO):
-        logging.info(f'Sending "{product.name}" product.')
+    @abstractmethod
+    def send(cls, obj):
+        """Отправляет данные к Markets-Bridge.
 
-        return cls._send_object(
-            product,
-            url=config.mb_products_url,
-        )
-
-    @classmethod
-    def send_category(cls, category: MBCategoryDTO):
-        logging.info(f'Sending "{category.name}" category.')
-
-        return cls._send_object(
-            category,
-            url=config.mb_categories_url,
-        )
+        Args:
+            obj: Markets-Bridge DTO.
+        """
 
     @classmethod
-    def send_brand(cls, brand: MBBrandDTO):
-        logging.info(f'Sending "{brand.name}" brand.')
+    def _send(cls, obj, url: str):
+        """Базовый метод отправления данных к Markets-Bridge.
 
-        return cls._send_object(
-            brand,
-            url=config.mb_brands_url,
-        )
+        Args:
+            obj: Markets-Bridge DTO;
+            url: адрес отправки данных.
+        """
 
-    @classmethod
-    def send_characteristic(cls, characteristic: MBCharacteristicDTO):
-        logging.info(f'Sending "{characteristic.name}" characteristic.')
-
-        return cls._send_object(
-            characteristic,
-            url=config.mb_characteristics_url,
-        )
-
-    @classmethod
-    def send_characteristic_value(cls, value: MBCharacteristicValueDTO):
-        logging.info(f'Sending "{value.value}" value.')
-
-        return cls._send_object(
-            value,
-            url=config.mb_characteristic_values_url,
-        )
-
-    @classmethod
-    def send_image(cls, image: bytes, product_id: int):
         headers = get_authorization_headers()
-        response = requests.post(
-            config.mb_product_images_url,
-            data={'product': product_id},
-            files={'image': (f'{uuid.uuid4().hex}.jpg', image)},
-            headers=headers,
-        )
-
-        if response.status_code == 401:
-            accesser = Accesser()
-            accesser.update_access_token()
-            response = cls.send_image(image, product_id)
-
-        response.raise_for_status()
-
-        return response
-
-    @classmethod
-    def _send_object(cls, obj, url) -> Response:
-        headers = get_authorization_headers()
+        logging.info(f'Отправка "{obj}" класса "{obj.__class__.__name__}".')
         response = requests.post(url, json=asdict(obj), headers=headers)
 
         if response.status_code == 401:
             accesser = Accesser()
             accesser.update_access_token()
 
-            return cls._send_object(obj, url)
+            return cls._send(obj, url)
 
         response.raise_for_status()
 
         return response
+
+
+class ProductSender(BaseSender):
+    """Отправитель товаров к Markets-Bridge."""
+
+    @classmethod
+    def send(cls, obj: MBProductDTO):
+        return cls._send(obj, url=config.mb_products_url)
+
+
+class CategorySender(BaseSender):
+    """Отправитель категорий к Markets-Bridge."""
+
+    @classmethod
+    def send(cls, obj: MBCategoryDTO):
+        return cls._send(obj, url=config.mb_categories_url)
+
+
+class BrandSender(BaseSender):
+    """Отправитель брендов к Markets-Bridge."""
+
+    @classmethod
+    def send(cls, obj: MBBrandDTO):
+        return cls._send(obj, url=config.mb_brands_url)
+
+
+class CharacteristicSender(BaseSender):
+    """Отправитель характеристик к Markets-Bridge."""
+
+    @classmethod
+    def send(cls, obj: MBCharacteristicDTO):
+        return cls._send(obj, url=config.mb_characteristics_url)
+
+
+class CharacteristicValueSender(BaseSender):
+    """Отправитель значений характеристик к Markets-Bridge."""
+
+    @classmethod
+    def send(cls, obj: MBCharacteristicValueDTO):
+        return cls._send(obj, url=config.mb_characteristic_values_url)
+
+
+def send_image(image: bytes, product_id: int):
+    """Отправляет изображение в виде байтов в систему Markets-Bridge, присваивая его товару с product_id."""
+
+    headers = get_authorization_headers()
+    response = requests.post(
+        config.mb_product_images_url,
+        data={'product': product_id},
+        files={'image': (f'{uuid.uuid4().hex}.jpg', image)},
+        headers=headers,
+    )
+
+    if response.status_code == 401:
+        accesser = Accesser()
+        accesser.update_access_token()
+        response = send_image(image, product_id)
+
+    response.raise_for_status()
+
+    return response
 
 
 class Singleton:

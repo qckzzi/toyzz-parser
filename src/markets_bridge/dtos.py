@@ -40,6 +40,7 @@ class MBProductDTO:
     category_name: str
     brand_name: str
     marketplace_id: int
+    description: str = None
     characteristic_values: list[str] = field(default_factory=list)
 
 

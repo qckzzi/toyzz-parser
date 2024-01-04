@@ -46,5 +46,6 @@ class ToyzzProductDTO:
     width: float
     height: float
     depth: float
+    description: str = None
     image_urls: list[str] = field(default_factory=list)
     values: list[ToyzzAttributeValueDTO] = field(default_factory=list)
