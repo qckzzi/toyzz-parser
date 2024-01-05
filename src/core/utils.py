@@ -29,29 +29,26 @@ from toyzz.dtos import (
     ToyzzProductDTO,
 )
 from toyzz.utils import (
-    Parser,
+    CategoryParser,
+    ProductCardParser,
 )
 
 
 def category_processing(url: str):
-    product_url_list = Parser.parse_product_urls_by_category_url(url)
+    toyzz_products = CategoryParser.parse(url)
 
-    for product_url in product_url_list:
-        try:
-            product_card_processing(product_url)
-        except Exception as e:
-            handle_exception(e)
-            continue
+    for product in toyzz_products:
+        process_product(product)
 
 
 def product_card_processing(url: str):
-    toyzz_products = Parser.parse_products_by_card_url(url)
+    toyzz_products = ProductCardParser.parse(url)
 
     for product in toyzz_products:
-        product_processing(product)
+        process_product(product)
 
 
-def product_processing(product: ToyzzProductDTO):
+def process_product(product: ToyzzProductDTO):
     _process_category(product)
     _process_brand(product)
     _process_characteristics(product)
@@ -72,21 +69,21 @@ def product_processing(product: ToyzzProductDTO):
 
 
 def _process_category(product: ToyzzProductDTO):
-    mb_category = CategoryFormatter.get_formatted_data(product)
+    mb_category = CategoryAdapter.get_formatted_data(product)
     response = CategorySender.send(mb_category)
 
     return response
 
 
 def _process_brand(product: ToyzzProductDTO):
-    mb_brand = BrandFormatter.get_formatted_data(product)
+    mb_brand = BrandAdapter.get_formatted_data(product)
     response = BrandSender.send(mb_brand)
 
     return response
 
 
 def _process_characteristics(product: ToyzzProductDTO):
-    mb_characteristics = CharacteristicFormatter.get_formatted_data(product)
+    mb_characteristics = CharacteristicAdapter.get_formatted_data(product)
     responses = []
 
     for char in mb_characteristics:
@@ -96,7 +93,7 @@ def _process_characteristics(product: ToyzzProductDTO):
 
 
 def _process_characteristic_values(product: ToyzzProductDTO):
-    mb_values = CharacteristicValueFormatter.get_formatted_data(product)
+    mb_values = CharacteristicValueAdapter.get_formatted_data(product)
     responses = []
 
     for value in mb_values:
@@ -106,7 +103,7 @@ def _process_characteristic_values(product: ToyzzProductDTO):
 
 
 def _process_product(product: ToyzzProductDTO):
-    mb_product = ProductFormatter.get_formatted_data(product)
+    mb_product = ProductAdapter.get_formatted_data(product)
     response = ProductSender.send(mb_product)
 
     return response
@@ -137,7 +134,7 @@ def handle_exception(e: Exception):
     print(traceback.format_exc())
 
 
-class BaseFormatter(ABC):
+class BaseAdapter(ABC):
     """Базовый преобразователь из Toyzz DTO в MB DTO."""
 
     @staticmethod
@@ -146,7 +143,7 @@ class BaseFormatter(ABC):
         """Форматирует данные, полученные от MBProductDTO."""
 
 
-class ProductFormatter(BaseFormatter):
+class ProductAdapter(BaseAdapter):
     """Преобразователь товаров для Markets-Bridge."""
 
     @staticmethod
@@ -173,7 +170,7 @@ class ProductFormatter(BaseFormatter):
         return product
 
 
-class CategoryFormatter(BaseFormatter):
+class CategoryAdapter(BaseAdapter):
     """Преобразователь категорий для Markets-Bridge."""
 
     @staticmethod
@@ -187,7 +184,7 @@ class CategoryFormatter(BaseFormatter):
         return category
 
 
-class BrandFormatter(BaseFormatter):
+class BrandAdapter(BaseAdapter):
     """Преобразователь брендов для Markets-Bridge."""
 
     @staticmethod
@@ -201,7 +198,7 @@ class BrandFormatter(BaseFormatter):
         return brand
 
 
-class CharacteristicFormatter(BaseFormatter):
+class CharacteristicAdapter(BaseAdapter):
     """Преобразователь характеристик для Markets-Bridge."""
 
     @staticmethod
@@ -220,7 +217,7 @@ class CharacteristicFormatter(BaseFormatter):
         return characteristic_list
 
 
-class CharacteristicValueFormatter(BaseFormatter):
+class CharacteristicValueAdapter(BaseAdapter):
     """Преобразователь значений характеристик для Markets-Bridge."""
 
     @staticmethod

@@ -42,7 +42,7 @@ class BaseSender(ABC):
         """
 
         headers = get_authorization_headers()
-        logging.info(f'Отправка "{obj}" класса "{obj.__class__.__name__}".')
+        logging.info(f'Отправка "{obj}"')
         response = requests.post(url, json=asdict(obj), headers=headers)
 
         if response.status_code == 401:
