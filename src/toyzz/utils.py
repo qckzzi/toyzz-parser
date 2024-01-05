@@ -1,10 +1,15 @@
 import html
 import json
 import re
+from abc import (
+    ABC,
+    abstractmethod,
+)
 from math import (
     ceil,
 )
 from urllib.parse import (
+    parse_qs,
     urlparse,
     urlunparse,
 )
@@ -31,26 +36,23 @@ from toyzz.dtos import (
 )
 
 
-# TODO: SRP
-class Parser:
-    """Toyzz information parser."""
+class BaseParser(ABC):
+    """Базовый класс парсера."""
 
-    product_data_class = ToyzzProductDTO
-    category_data_class = ToyzzCategoryDTO
-    attribute_data_class = ToyzzAttributeDTO
-    attribute_value_data_class = ToyzzAttributeValueDTO
-    brand_data_class = ToyzzBrandDTO
-
-    product_detail_data_re_pattern = r"<script>\s*window\['serials'\]\s*=\s*(?P<json_data>.*?)\s*</script>"
-    product_common_data_re_pattern = (
-        r'<script>\s*window\.addEventListener\("load", function\(\) '
-        r'{\s*var data =({.*?});\s+dataLayer\.push\(data\);\s*}\);\s*</script>'
-    )
-    synonyms_for_mass = ('ağırlık', 'ağırlığı')
-
-    # TODO: Декомпозировать; Переписать dirty code
     @classmethod
-    def parse_product_urls_by_category_url(cls, url: str) -> list[str]:
+    @abstractmethod
+    def parse(cls, url: str) -> list[ToyzzProductDTO]:
+        """Возвращает данные, полученные по переданному url."""
+
+
+class CategoryParser(BaseParser):
+    """Парсер категорий.
+
+    Позволяет получить товары из целой категории (поиска) в магазине.
+    """
+
+    @classmethod
+    def parse(cls, url: str) -> list[ToyzzProductDTO]:
         response_text = cls.send_category_request(url)
 
         soup = BeautifulSoup(response_text, 'html.parser')
@@ -67,10 +69,10 @@ class Parser:
         product_quantity_tag = soup.find('span', class_='fs-16')
         product_quantity = int(re.sub('[^0-9]', '', product_quantity_tag.text))
 
-        pages_count = ceil(product_quantity/30)
+        pages_count = ceil(product_quantity / 30)
 
         # FIXME: Захардкоженная двойка
-        for page in range(2, pages_count+1):
+        for page in range(2, pages_count + 1):
             response_text = cls.send_category_request(url, page=page)
             soup = BeautifulSoup(response_text, 'html.parser')
             product_tags = soup.find_all('div', class_='product-box')
@@ -82,14 +84,34 @@ class Parser:
                     product_urls.append(a_tag['href'])
 
         marketplace_url = config.toyzz_domain
-        product_urls = [f'{marketplace_url}{url}' for url in product_urls]
+        product_urls = {clean_query_in_url(f'{marketplace_url}{url}') for url in product_urls}
+        products = []
 
-        return product_urls
+        from core.utils import (
+            handle_exception,
+        )
+
+        for product_url in product_urls:
+            if '{{' in product_url:
+                continue
+
+            try:
+                products.extend(ProductCardParser.parse(product_url))
+            except Exception as e:
+                handle_exception(e)
+                continue
+
+        return products
 
     @classmethod
     def send_category_request(cls, url: str, page: int = 1) -> str:
-        page_parameter = 'q=/page/'
-        url = f'{url}?{page_parameter}{page}'
+        page_parameter = '/page/'
+
+        if has_query(url):
+            url = f'{url}{page_parameter}{page}'
+        else:
+            url = f'{url}?q={page_parameter}{page}'
+
         chrome_options = Options()
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--headless')
@@ -101,20 +123,27 @@ class Parser:
 
         return page_source
 
-    @classmethod
-    def parse_product_urls_by_product_card_url(cls, url: str) -> list[str]:
-        pass
 
-    # TODO: Декомпозировать; Переписать dirty code
+class ProductCardParser(BaseParser):
+    """Парсер отдельной карточки товара.
+
+    Позволяет получить варианты в одной карточке товара.
+    """
+
     @classmethod
-    def parse_products_by_card_url(cls, url: str) -> list[product_data_class]:
+    def parse(cls, url: str) -> list[ToyzzProductDTO]:
         response = requests.get(url)
         response.raise_for_status()
 
-        detail_data_matches = re.search(cls.product_detail_data_re_pattern, response.text)
+        product_detail_data_re_pattern = r"<script>\s*window\['serials'\]\s*=\s*(?P<json_data>.*?)\s*</script>"
+        detail_data_matches = re.search(product_detail_data_re_pattern, response.text)
         detail_data_str = detail_data_matches.group('json_data')
 
-        common_data_matches = re.search(cls.product_common_data_re_pattern, response.text, re.DOTALL)
+        product_common_data_re_pattern = (
+            r'<script>\s*window\.addEventListener\("load", function\(\) '
+            r'{\s*var data =({.*?});\s+dataLayer\.push\(data\);\s*}\);\s*</script>'
+        )
+        common_data_matches = re.search(product_common_data_re_pattern, response.text, re.DOTALL)
         common_data_str = common_data_matches.group(1)
         common_data_str_clean = re.sub(r'//[^\n]*', '', common_data_str)
 
@@ -122,7 +151,7 @@ class Parser:
         common_data = json.loads(common_data_str_clean.replace('\'', '"'))
 
         brand_name = html.unescape(common_data['brand'])
-        brand = cls.brand_data_class(brand_name)
+        brand = ToyzzBrandDTO(brand_name)
 
         soup = BeautifulSoup(response.text, 'html.parser')
 
@@ -138,8 +167,8 @@ class Parser:
             name_tag, value_tag = spec_data
 
             if name_tag.text.lower().strip() in ('yaş aralığı', 'cinsiyet'):
-                attribute = cls.attribute_data_class(name_tag.text.strip())
-                attribute_value = cls.attribute_value_data_class(value_tag.text.lstrip(':').strip(), attribute)
+                attribute = ToyzzAttributeDTO(name_tag.text.strip())
+                attribute_value = ToyzzAttributeValueDTO(value_tag.text.lstrip(':').strip(), attribute)
                 values.append(attribute_value)
 
         paragraphs = soup.find_all('p')
@@ -148,6 +177,7 @@ class Parser:
         width = '0'
         height = '0'
         depth = '0'
+        synonyms_for_mass = ('ağırlık', 'ağırlığı')
 
         for p in paragraphs:
             text = p.get_text(strip=True)
@@ -157,7 +187,7 @@ class Parser:
                 value = match.group(1)
                 text = text.lower()
 
-                if any(mass_word in text for mass_word in cls.synonyms_for_mass):
+                if any(mass_word in text for mass_word in synonyms_for_mass):
                     weight = value.replace(' kg', '')
                 elif 'ölçüsü' in text:
                     dimensions = value.replace(' cm', '').strip('.').split(" x ")
@@ -178,17 +208,9 @@ class Parser:
         category_breadcrumb = soup.find('ol', class_='breadcrumb')
         category_tags = list(filter(lambda x: not isinstance(x, NavigableString), category_breadcrumb.contents))
         category_name = html.unescape(category_tags[-2].text)
-        category = cls.category_data_class(category_name)
+        category = ToyzzCategoryDTO(category_name)
 
-        parsed_url = urlparse(url)
-        clean_url = urlunparse((
-            parsed_url.scheme,
-            parsed_url.netloc,
-            parsed_url.path,
-            parsed_url.params,
-            '',
-            parsed_url.fragment,
-        ))
+        cleaned_url = clean_query_in_url(url)
 
         products = []
 
@@ -206,10 +228,10 @@ class Parser:
                 name = f'{common_title}, {product_unit["title"]}'
 
             # FIXME: Это полный Peace, Death!
-            product = cls.product_data_class(
+            product = ToyzzProductDTO(
                 id=product_unit['id'],
                 name=name,
-                url=f'{clean_url}?serial={product_unit["id"]}',
+                url=f'{cleaned_url}?serial={product_unit["id"]}',
                 category=category,
                 brand=brand,
                 stock=product_unit['stock'],
@@ -230,3 +252,28 @@ class Parser:
             products.append(product)
 
         return products
+
+
+def clean_query_in_url(url: str) -> str:
+    """Возвращает url с очищенными параметрами."""
+
+    parsed_url = urlparse(url)
+    clean_url = urlunparse((
+        parsed_url.scheme,
+        parsed_url.netloc,
+        parsed_url.path,
+        parsed_url.params,
+        '',
+        parsed_url.fragment,
+    ))
+
+    return clean_url
+
+
+def has_query(url: str) -> bool:
+    """Возвращает флаг, есть ли параметры в url."""
+
+    parsed_url = urlparse(url)
+    query_params = parse_qs(parsed_url.query)
+
+    return bool(query_params)
