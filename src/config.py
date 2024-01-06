@@ -43,3 +43,6 @@ mb_logs_url = mb_domain + 'api/v1/common/logs/'
 
 # Toyzz
 toyzz_domain = 'https://www.toyzzshop.com'
+
+# Sentry
+sentry_dsn = os.getenv('SENTRY_DSN')

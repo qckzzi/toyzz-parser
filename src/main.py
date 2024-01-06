@@ -3,6 +3,7 @@ import json
 import logging
 
 import pika
+import sentry_sdk
 
 import config
 from core.enums import (
@@ -30,6 +31,9 @@ def callback(ch, method, properties, body):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(asctime)s | %(levelname)s | %(message)s')
+
+    if config.sentry_dsn:
+        sentry_sdk.init(dsn=config.sentry_dsn, enable_tracing=True)
 
     connection_parameters = pika.ConnectionParameters(host='localhost', heartbeat=300, blocked_connection_timeout=300)
     with pika.BlockingConnection(connection_parameters) as connection:
